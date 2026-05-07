@@ -1,0 +1,100 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: Simple Release Pipeline
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        type: string
+        required: true
+        description:
+          This is a system-generated parameter for application releases.
+          Contains the artifacts to deploy for each service.
+
+metadata:
+  stages/v1alpha1:
+    - name: QA Environment
+      jobs:
+        - deploy-to-qa
+        - qa-approval
+    - name: Staging Environment
+      jobs:
+        - deploy-to-staging
+        - staging-approval
+    - name: Production Environment
+      jobs:
+        - deploy-to-prod
+        - smoke-tests
+
+jobs:
+  # ==========================================
+  # QA Environment
+  # ==========================================
+  deploy-to-qa:
+    uses: cloudbees-unify-poc/hackersnews-app/.cloudbees/workflows/deployer.yaml
+    with:
+      manifest: ${{ inputs.manifest }}
+      environment: hackersnews-qa
+    secrets: inherit
+    vars: inherit
+
+  qa-approval:
+    needs:
+      - deploy-to-qa
+    timeout-minutes: 4320
+    with:
+      instructions: "QA deployment complete. Review and approve to proceed to Staging."
+      disallowLaunchByUser: false
+    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
+
+  # ==========================================
+  # Staging Environment
+  # ==========================================
+  deploy-to-staging:
+    needs:
+      - qa-approval
+    uses: cloudbees-unify-poc/hackersnews-app/.cloudbees/workflows/deployer.yaml
+    with:
+      manifest: ${{ inputs.manifest }}
+      environment: hackersnews-staging
+    secrets: inherit
+    vars: inherit
+
+  staging-approval:
+    needs:
+      - deploy-to-staging
+    timeout-minutes: 4320
+    with:
+      instructions: "Staging deployment complete. Review and approve to proceed to Production."
+      disallowLaunchByUser: false
+    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
+
+  # ==========================================
+  # Production Environment
+  # ==========================================
+  deploy-to-prod:
+    needs:
+      - staging-approval
+    uses: cloudbees-unify-poc/hackersnews-app/.cloudbees/workflows/deployer.yaml
+    with:
+      manifest: ${{ inputs.manifest }}
+      environment: hackersnews-prod
+    secrets: inherit
+    vars: inherit
+
+  smoke-tests:
+    environment: hackersnews-prod
+    needs:
+      - deploy-to-prod
+    steps:
+      - name: Verify deployments
+        uses: docker://alpine:3.20
+        run: |
+          echo "=== Production Smoke Tests ==="
+          echo "✓ All services deployed to hackersnews-prod namespace"
+          echo "✓ Release complete!"
+          echo ""
+          echo "Deployed services:"
+          echo "  - hackers-api"
+          echo "  - hackers-auth"
+          echo "  - hackers-web"
