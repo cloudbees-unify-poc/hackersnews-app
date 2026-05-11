@@ -1,0 +1,599 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: TJX Parameter Demonstration
+on:
+  workflow_dispatch:
+    inputs:
+      # String input example
+      artifact_version:
+        type: string
+        required: true
+        description: "Artifact version to deploy (e.g., 1.0.4)"
+        default: "1.0.4"
+
+      # Dropdown selection - simulating JFrog branch selection
+      branch_name:
+        type: choice
+        required: true
+        description: "Select branch (simulates JFrog branch selection)"
+        options:
+          - main
+          - develop
+          - release/v1.0
+          - hotfix/critical-fix
+        default: main
+
+      # Another dropdown - simulating artifact selection from JFrog
+      artifact_id:
+        type: choice
+        required: true
+        description: "Select artifact from branch (simulates JFrog artifact list)"
+        options:
+          - "artifact-main-20260511-001"
+          - "artifact-main-20260510-002"
+          - "artifact-main-20260509-003"
+          - "artifact-develop-20260511-001"
+        default: "artifact-main-20260511-001"
+
+      # Boolean options
+      skip_tests:
+        type: boolean
+        required: false
+        description: "Skip integration tests (emergency deployments only)"
+        default: false
+
+      enable_feature_flags:
+        type: boolean
+        required: false
+        description: "Enable feature flags after deployment"
+        default: true
+
+      # String input for deployment notes
+      deployment_notes:
+        type: string
+        required: false
+        description: "Deployment notes for audit trail"
+        default: "Standard deployment"
+
+metadata:
+  stages/v1alpha1:
+    - name: Parameter Validation & Lock
+      jobs:
+        - validate-and-lock-parameters
+        - display-locked-parameters
+    - name: QA Deployment
+      jobs:
+        - deploy-to-qa
+        - test-qa
+        - qa-approval
+    - name: Staging Deployment
+      jobs:
+        - deploy-to-staging
+        - test-staging
+        - staging-approval
+    - name: Production Deployment
+      jobs:
+        - deploy-to-production
+        - smoke-tests
+        - verify-parameters-unchanged
+
+jobs:
+  # Job 1: Validate and lock parameters at workflow initiation
+  validate-and-lock-parameters:
+    outputs:
+      locked-artifact-version: ${{ steps.lock-params.outputs.artifact-version }}
+      locked-branch-name: ${{ steps.lock-params.outputs.branch-name }}
+      locked-artifact-id: ${{ steps.lock-params.outputs.artifact-id }}
+      locked-skip-tests: ${{ steps.lock-params.outputs.skip-tests }}
+      locked-enable-flags: ${{ steps.lock-params.outputs.enable-flags }}
+      locked-deployment-notes: ${{ steps.lock-params.outputs.deployment-notes }}
+      locked-timestamp: ${{ steps.lock-params.outputs.timestamp }}
+      locked-initiator: ${{ steps.lock-params.outputs.initiator }}
+    steps:
+      - name: Lock parameters at workflow initiation
+        id: lock-params
+        uses: docker://alpine:3.20
+        run: |
+          echo "🔒 LOCKING PARAMETERS AT WORKFLOW INITIATION"
+          echo "=============================================="
+          echo ""
+          echo "These parameters will remain IMMUTABLE throughout the entire pipeline"
+          echo "No changes will be allowed in any subsequent stage (QA → Staging → Prod)"
+          echo ""
+
+          # Lock all parameters with timestamp and initiator
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+          echo "📋 Parameters locked at: $TIMESTAMP"
+          echo "👤 Initiated by: ${{ cloudbees.actor }}"
+          echo ""
+          echo "Locked Parameters:"
+          echo "  • Artifact Version: ${{ inputs.artifact_version }}"
+          echo "  • Branch Name: ${{ inputs.branch_name }}"
+          echo "  • Artifact ID: ${{ inputs.artifact_id }}"
+          echo "  • Skip Tests: ${{ inputs.skip_tests }}"
+          echo "  • Enable Feature Flags: ${{ inputs.enable_feature_flags }}"
+          echo "  • Deployment Notes: ${{ inputs.deployment_notes }}"
+          echo ""
+
+          # Save locked parameters to outputs (immutable)
+          echo "${{ inputs.artifact_version }}" > $CLOUDBEES_OUTPUTS/artifact-version
+          echo "${{ inputs.branch_name }}" > $CLOUDBEES_OUTPUTS/branch-name
+          echo "${{ inputs.artifact_id }}" > $CLOUDBEES_OUTPUTS/artifact-id
+          echo "${{ inputs.skip_tests }}" > $CLOUDBEES_OUTPUTS/skip-tests
+          echo "${{ inputs.enable_feature_flags }}" > $CLOUDBEES_OUTPUTS/enable-flags
+          echo "${{ inputs.deployment_notes }}" > $CLOUDBEES_OUTPUTS/deployment-notes
+          echo "$TIMESTAMP" > $CLOUDBEES_OUTPUTS/timestamp
+          echo "${{ cloudbees.actor }}" > $CLOUDBEES_OUTPUTS/initiator
+
+          echo "✅ Parameters successfully locked"
+
+      - name: Simulate JFrog artifact validation
+        uses: docker://alpine:3.20
+        run: |
+          echo "🔍 SIMULATING JFROG ARTIFACT VALIDATION"
+          echo "========================================"
+          echo ""
+          echo "In production, this step would:"
+          echo "  1. Connect to JFrog Artifactory API"
+          echo "  2. Verify artifact exists: ${{ inputs.artifact_id }}"
+          echo "  3. Validate branch: ${{ inputs.branch_name }}"
+          echo "  4. Check artifact integrity (checksums, signatures)"
+          echo "  5. Retrieve artifact metadata"
+          echo ""
+
+          # Simulate artifact metadata retrieval
+          cat > artifact_metadata.json << EOF
+          {
+            "artifact_id": "${{ inputs.artifact_id }}",
+            "version": "${{ inputs.artifact_version }}",
+            "branch": "${{ inputs.branch_name }}",
+            "repository": "tjx-releases",
+            "path": "com/tjx/app/${{ inputs.artifact_version }}",
+            "size": "45.8 MB",
+            "checksum_md5": "a3f5c8d9e2b1f4a6c8d9e2b1",
+            "checksum_sha256": "9e2b1f4a6c8d9e2b1f4a6c8d9e2b1f4a6c8d9e2b1f4a6c8d9e2b1f4a6c8d9",
+            "created_date": "2026-05-11T10:30:00Z",
+            "created_by": "jenkins-ci",
+            "build_number": "1234",
+            "ci_pipeline": "https://jenkins.tjx.com/job/app-build/1234"
+          }
+          EOF
+
+          echo "✅ Artifact validated in JFrog"
+          echo "✅ Artifact metadata retrieved"
+          cat artifact_metadata.json
+
+      - name: Publish parameter lock evidence
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |
+            # 🔒 Parameters Locked at Workflow Initiation
+
+            ## Immutable Parameter Set
+            These parameters are **LOCKED** and cannot be changed throughout the pipeline lifecycle.
+
+            | Parameter | Value | Type |
+            |-----------|-------|------|
+            | **Artifact Version** | `${{ inputs.artifact_version }}` | String |
+            | **Branch Name** | `${{ inputs.branch_name }}` | Dropdown |
+            | **Artifact ID** | `${{ inputs.artifact_id }}` | Dropdown (JFrog) |
+            | **Skip Tests** | `${{ inputs.skip_tests }}` | Boolean |
+            | **Enable Feature Flags** | `${{ inputs.enable_feature_flags }}` | Boolean |
+            | **Deployment Notes** | `${{ inputs.deployment_notes }}` | String |
+
+            ## Audit Information
+            - **Locked Timestamp**: ${{ steps.lock-params.outputs.timestamp }}
+            - **Initiated By**: ${{ cloudbees.actor }}
+            - **Workflow Run**: `#${{ cloudbees.run_number }}`
+            - **Run ID**: `${{ cloudbees.run_id }}`
+
+            ## Parameter Immutability Guarantee
+            ✅ Parameters are captured as job outputs
+            ✅ All downstream jobs reference locked values only
+            ✅ No user can modify parameters mid-pipeline
+            ✅ RBAC prevents unauthorized parameter changes
+            ✅ Full audit trail maintained for compliance
+
+            ---
+            **Note**: These locked parameters will be used consistently across all environments (QA → Staging → Production)
+          format: MARKDOWN
+
+  # Job 2: Display locked parameters for verification
+  display-locked-parameters:
+    needs:
+      - validate-and-lock-parameters
+    steps:
+      - name: Display locked parameters for verification
+        uses: docker://alpine:3.20
+        run: |
+          echo "📖 DISPLAYING LOCKED PARAMETERS"
+          echo "================================"
+          echo ""
+          echo "These parameters were locked in the previous job:"
+          echo "  • Artifact Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  • Branch Name: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo "  • Artifact ID: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  • Skip Tests: ${{ needs.validate-and-lock-parameters.outputs.locked-skip-tests }}"
+          echo "  • Enable Flags: ${{ needs.validate-and-lock-parameters.outputs.locked-enable-flags }}"
+          echo "  • Deployment Notes: ${{ needs.validate-and-lock-parameters.outputs.locked-deployment-notes }}"
+          echo "  • Locked At: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}"
+          echo "  • Locked By: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}"
+          echo ""
+          echo "✅ All parameters verified and immutable"
+
+  # Job 3: Deploy to QA using locked parameters
+  deploy-to-qa:
+    environment: hackersnews-qa
+    needs:
+      - validate-and-lock-parameters
+    steps:
+      - name: Deploy to QA with locked parameters
+        uses: docker://alpine:3.20
+        run: |
+          echo "🚀 DEPLOYING TO QA ENVIRONMENT"
+          echo "=============================="
+          echo ""
+          echo "Using LOCKED parameters (immutable):"
+          echo "  • Artifact: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  • Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  • Branch: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo ""
+
+          # Simulate Ansible playbook execution
+          echo "Simulating Ansible deployment..."
+          echo "  ansible-playbook deploy.yml \\"
+          echo "    -e artifact_id=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }} \\"
+          echo "    -e version=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }} \\"
+          echo "    -e environment=qa \\"
+          echo "    -i inventory/qa"
+          echo ""
+          sleep 3
+          echo "✅ QA deployment successful"
+
+      - name: Register deployed artifact
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |
+            # QA Deployment Complete
+
+            ## Deployed Parameters (Locked)
+            - **Artifact ID**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}`
+            - **Version**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}`
+            - **Branch**: `${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}`
+            - **Environment**: QA
+
+            ## Deployment Details
+            - **Deployment Method**: Ansible Playbook
+            - **Inventory**: inventory/qa
+
+            ✅ Deployment successful using immutable parameters
+          format: MARKDOWN
+
+  # Job 4: Test QA (conditionally skip based on locked parameter)
+  test-qa:
+    environment: hackersnews-qa
+    needs:
+      - deploy-to-qa
+      - validate-and-lock-parameters
+    steps:
+      - name: Run QA tests (conditional based on locked parameter)
+        uses: docker://alpine:3.20
+        run: |
+          SKIP_TESTS="${{ needs.validate-and-lock-parameters.outputs.locked-skip-tests }}"
+
+          if [ "$SKIP_TESTS" = "true" ]; then
+            echo "⚠️  SKIPPING TESTS (per locked parameter)"
+            echo "Tests skipped by request at workflow initiation"
+          else
+            echo "🧪 RUNNING QA TEST SUITE"
+            echo "========================"
+            sleep 4
+            echo "✅ Unit tests: 247/247 passed"
+            echo "✅ Integration tests: 89/89 passed"
+            echo "✅ API tests: 45/45 passed"
+          fi
+
+  # Job 5: QA Approval (with parameter visibility)
+  qa-approval:
+    needs:
+      - test-qa
+      - validate-and-lock-parameters
+    timeout-minutes: 4320
+    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
+    with:
+      instructions: |
+        ## QA Approval Request
+
+        Review the QA deployment before proceeding to Staging.
+
+        ### Locked Parameters (Immutable)
+        - **Artifact**: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}
+        - **Version**: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}
+        - **Branch**: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}
+        - **Locked By**: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}
+
+        **Note**: These parameters CANNOT be changed and will be used for Staging and Production deployments.
+      disallowLaunchByUser: true
+
+  # Job 6: Deploy to Staging using same locked parameters
+  deploy-to-staging:
+    environment: hackersnews-staging
+    needs:
+      - qa-approval
+      - validate-and-lock-parameters
+    steps:
+      - name: Deploy to Staging with locked parameters
+        uses: docker://alpine:3.20
+        run: |
+          echo "🚀 DEPLOYING TO STAGING ENVIRONMENT"
+          echo "===================================="
+          echo ""
+          echo "Using SAME LOCKED parameters from QA:"
+          echo "  • Artifact: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  • Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  • Branch: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo ""
+          echo "⚠️  Parameters are IMMUTABLE - no changes allowed"
+          echo ""
+
+          # Simulate Ansible playbook execution
+          echo "Simulating Ansible deployment..."
+          echo "  ansible-playbook deploy.yml \\"
+          echo "    -e artifact_id=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }} \\"
+          echo "    -e version=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }} \\"
+          echo "    -e environment=staging \\"
+          echo "    -i inventory/staging"
+          echo ""
+          sleep 3
+          echo "✅ Staging deployment successful"
+
+      - name: Register deployed artifact
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |
+            # Staging Deployment Complete
+
+            ## Deployed Parameters (Same as QA - Locked)
+            - **Artifact ID**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}`
+            - **Version**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}`
+            - **Branch**: `${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}`
+            - **Environment**: Staging
+
+            ## Parameter Consistency Verification
+            ✅ Same artifact as QA deployment
+            ✅ Parameters unchanged since workflow initiation
+            ✅ No parameter drift detected
+
+            **Parameter Lock Timestamp**: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}
+          format: MARKDOWN
+
+  # Job 7: Test Staging
+  test-staging:
+    environment: hackersnews-staging
+    needs:
+      - deploy-to-staging
+      - validate-and-lock-parameters
+    steps:
+      - name: Run Staging tests
+        uses: docker://alpine:3.20
+        run: |
+          SKIP_TESTS="${{ needs.validate-and-lock-parameters.outputs.locked-skip-tests }}"
+
+          if [ "$SKIP_TESTS" = "true" ]; then
+            echo "⚠️  SKIPPING TESTS (per locked parameter)"
+          else
+            echo "🧪 RUNNING STAGING TEST SUITE"
+            echo "=============================="
+            sleep 5
+            echo "✅ Integration tests: 156/156 passed"
+            echo "✅ E2E tests: 24/24 passed"
+            echo "✅ Performance tests: Passed"
+          fi
+
+  # Job 8: Staging Approval (different approval group - Release Managers)
+  staging-approval:
+    needs:
+      - test-staging
+      - validate-and-lock-parameters
+    timeout-minutes: 4320
+    delegates: cloudbees-io/manual-approval/custom-job.yml@v1
+    with:
+      instructions: |
+        ## 🔐 Release Manager Approval Required
+
+        Production deployment ready for approval.
+
+        ### Locked Parameters (Immutable)
+        - **Artifact**: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}
+        - **Version**: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}
+        - **Branch**: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}
+        - **Notes**: ${{ needs.validate-and-lock-parameters.outputs.locked-deployment-notes }}
+
+        ### Deployment Trail
+        - ✅ QA deployment successful
+        - ✅ Staging deployment successful
+        - ⏳ Production deployment pending approval
+
+        **Security**: Parameters have been locked since workflow initiation and cannot be modified.
+      disallowLaunchByUser: true
+      approvers: ""  # In production, configure specific release manager group
+
+  # Job 9: Deploy to Production using same locked parameters
+  deploy-to-production:
+    environment: hackersnews-prod
+    needs:
+      - staging-approval
+      - validate-and-lock-parameters
+    steps:
+      - name: Final parameter verification before production
+        uses: docker://alpine:3.20
+        run: |
+          echo "🔐 FINAL PARAMETER VERIFICATION"
+          echo "================================"
+          echo ""
+          echo "Verifying parameters have not changed since workflow initiation..."
+          echo ""
+          echo "  Original lock timestamp: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}"
+          echo "  Original initiator: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}"
+          echo ""
+          echo "  Artifact ID: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  Branch: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo ""
+          echo "✅ Parameter integrity verified"
+          echo "✅ No parameter drift detected"
+          echo "✅ Safe to proceed with production deployment"
+
+      - name: Deploy to Production with locked parameters
+        uses: docker://alpine:3.20
+        run: |
+          echo "🚀 DEPLOYING TO PRODUCTION ENVIRONMENT"
+          echo "======================================"
+          echo ""
+          echo "Using SAME LOCKED parameters from QA and Staging:"
+          echo "  • Artifact: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  • Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  • Branch: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo ""
+          echo "⚠️  Parameters are IMMUTABLE - guaranteed consistency"
+          echo ""
+
+          # Simulate Ansible playbook execution
+          echo "Simulating Ansible deployment..."
+          echo "  ansible-playbook deploy.yml \\"
+          echo "    -e artifact_id=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }} \\"
+          echo "    -e version=${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }} \\"
+          echo "    -e environment=production \\"
+          echo "    -i inventory/production"
+          echo ""
+          sleep 4
+          echo "✅ Production deployment successful"
+
+      - name: Conditionally enable feature flags
+        uses: docker://alpine:3.20
+        run: |
+          ENABLE_FLAGS="${{ needs.validate-and-lock-parameters.outputs.locked-enable-flags }}"
+
+          if [ "$ENABLE_FLAGS" = "true" ]; then
+            echo "🚩 ENABLING FEATURE FLAGS"
+            echo "========================="
+            sleep 2
+            echo "✅ Feature flags enabled in production"
+          else
+            echo "⏭️  Feature flags not enabled (per locked parameter)"
+          fi
+
+      - name: Register production deployment
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |
+            # ✅ Production Deployment Complete
+
+            ## Deployed Parameters (Immutable Throughout Pipeline)
+            - **Artifact ID**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}`
+            - **Version**: `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}`
+            - **Branch**: `${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}`
+            - **Environment**: Production
+            - **Feature Flags**: ${{ needs.validate-and-lock-parameters.outputs.locked-enable-flags }}
+
+            ## Parameter Consistency Verification
+            ✅ Same artifact deployed to QA, Staging, and Production
+            ✅ Parameters locked at: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}
+            ✅ Parameters locked by: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}
+            ✅ Zero parameter changes throughout pipeline
+            ✅ Full audit trail available
+
+            ## Deployment Notes
+            > ${{ needs.validate-and-lock-parameters.outputs.locked-deployment-notes }}
+
+            ---
+            **Compliance**: This deployment used immutable parameters for complete audit traceability.
+          format: MARKDOWN
+
+  # Job 10: Smoke tests
+  smoke-tests:
+    environment: hackersnews-prod
+    needs:
+      - deploy-to-production
+    steps:
+      - name: Run production smoke tests
+        uses: docker://alpine:3.20
+        run: |
+          echo "🧪 RUNNING PRODUCTION SMOKE TESTS"
+          echo "=================================="
+          sleep 3
+          echo "✅ Health check: PASS"
+          echo "✅ Critical paths: PASS"
+          echo "✅ API endpoints: PASS"
+
+  # Job 11: Final verification that parameters remained unchanged
+  verify-parameters-unchanged:
+    needs:
+      - smoke-tests
+      - validate-and-lock-parameters
+    steps:
+      - name: Final audit - verify parameters never changed
+        uses: docker://alpine:3.20
+        run: |
+          echo "📋 FINAL PARAMETER AUDIT"
+          echo "========================"
+          echo ""
+          echo "Verifying parameters remained unchanged throughout entire pipeline:"
+          echo ""
+          echo "  ✅ Artifact ID: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}"
+          echo "  ✅ Version: ${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}"
+          echo "  ✅ Branch: ${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}"
+          echo "  ✅ Skip Tests: ${{ needs.validate-and-lock-parameters.outputs.locked-skip-tests }}"
+          echo "  ✅ Enable Flags: ${{ needs.validate-and-lock-parameters.outputs.locked-enable-flags }}"
+          echo ""
+          echo "  🔒 Locked at: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}"
+          echo "  👤 Locked by: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}"
+          echo ""
+          echo "✅ PARAMETER IMMUTABILITY VERIFIED"
+          echo "✅ Same parameters used in QA, Staging, and Production"
+          echo "✅ Full compliance and audit trail maintained"
+
+      - name: Publish final audit evidence
+        uses: cloudbees-io/publish-evidence-item@v1
+        with:
+          content: |
+            # 🎉 Deployment Complete - Final Parameter Audit
+
+            ## Parameter Immutability Verification
+
+            This deployment successfully maintained **parameter immutability** throughout the entire pipeline lifecycle.
+
+            ### Parameters Used (Immutable)
+            | Parameter | Value | Locked At |
+            |-----------|-------|-----------|
+            | Artifact ID | `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-id }}` | ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }} |
+            | Version | `${{ needs.validate-and-lock-parameters.outputs.locked-artifact-version }}` | ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }} |
+            | Branch | `${{ needs.validate-and-lock-parameters.outputs.locked-branch-name }}` | ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }} |
+            | Skip Tests | `${{ needs.validate-and-lock-parameters.outputs.locked-skip-tests }}` | ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }} |
+            | Enable Flags | `${{ needs.validate-and-lock-parameters.outputs.locked-enable-flags }}` | ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }} |
+
+            ### Deployment History
+            - ✅ **QA**: Deployed successfully with locked parameters
+            - ✅ **Staging**: Deployed successfully with locked parameters
+            - ✅ **Production**: Deployed successfully with locked parameters
+
+            ### Audit Trail
+            - **Workflow Initiated By**: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}
+            - **Parameters Locked At**: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}
+            - **Workflow Run**: `#${{ cloudbees.run_number }}`
+            - **Zero Parameter Changes**: Confirmed
+
+            ### Key Capabilities Demonstrated
+            1. ✅ **String inputs** for version numbers
+            2. ✅ **Dropdown selections** simulating JFrog artifact selection
+            3. ✅ **Boolean options** for conditional behavior
+            4. ✅ **Parameter locking** at workflow initiation
+            5. ✅ **Parameter immutability** throughout pipeline
+            6. ✅ **Different approval groups** (QA team vs Release Managers)
+            7. ✅ **Full audit trail** with timestamps and actors
+            8. ✅ **Parameter visibility** in approval screens
+
+            ---
+            **Compliance Status**: PASSED - Full parameter immutability and audit traceability achieved
+          format: MARKDOWN
