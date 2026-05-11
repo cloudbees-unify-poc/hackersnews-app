@@ -4,57 +4,46 @@ name: TJX Parameter Demonstration
 on:
   workflow_dispatch:
     inputs:
-      # String input example
       artifact_version:
         type: string
         required: true
-        description: "Artifact version to deploy (e.g., 1.0.4)"
-        default: "1.0.4"
-
-      # Dropdown selection - simulating JFrog branch selection
+        description: Artifact version to deploy (e.g., 1.0.4)
+        default: 1.0.4
       branch_name:
         type: choice
         required: true
-        description: "Select branch (simulates JFrog branch selection)"
+        description: Select branch (simulates JFrog branch selection)
         options:
           - main
           - develop
           - release/v1.0
           - hotfix/critical-fix
         default: main
-
-      # Another dropdown - simulating artifact selection from JFrog
       artifact_id:
         type: choice
         required: true
-        description: "Select artifact from branch (simulates JFrog artifact list)"
+        description: Select artifact from branch (simulates JFrog artifact list)
         options:
-          - "artifact-main-20260511-001"
-          - "artifact-main-20260510-002"
-          - "artifact-main-20260509-003"
-          - "artifact-develop-20260511-001"
-        default: "artifact-main-20260511-001"
-
-      # Boolean options
+          - artifact-main-20260511-001
+          - artifact-main-20260510-002
+          - artifact-main-20260509-003
+          - artifact-develop-20260511-001
+        default: artifact-main-20260511-001
       skip_tests:
         type: boolean
         required: false
-        description: "Skip integration tests (emergency deployments only)"
+        description: Skip integration tests (emergency deployments only)
         default: false
-
       enable_feature_flags:
         type: boolean
         required: false
-        description: "Enable feature flags after deployment"
+        description: Enable feature flags after deployment
         default: true
-
-      # String input for deployment notes
       deployment_notes:
         type: string
         required: false
-        description: "Deployment notes for audit trail"
-        default: "Standard deployment"
-
+        description: Deployment notes for audit trail
+        default: Standard deployment
 metadata:
   stages/v1alpha1:
     - name: Parameter Validation & Lock
@@ -76,9 +65,7 @@ metadata:
         - deploy-to-production
         - smoke-tests
         - verify-parameters-unchanged
-
 jobs:
-  # Job 1: Validate and lock parameters at workflow initiation
   validate-and-lock-parameters:
     outputs:
       locked-artifact-version: ${{ steps.lock-params.outputs.artifact-version }}
@@ -128,7 +115,6 @@ jobs:
           echo "$INITIATOR" > $CLOUDBEES_OUTPUTS/initiator
 
           echo "✅ Parameters successfully locked"
-
       - name: Simulate JFrog artifact validation
         uses: docker://alpine:3.20
         run: |
@@ -164,7 +150,6 @@ jobs:
           echo "✅ Artifact validated in JFrog"
           echo "✅ Artifact metadata retrieved"
           cat artifact_metadata.json
-
       - name: Publish parameter lock evidence
         uses: cloudbees-io/publish-evidence-item@v1
         with:
@@ -199,8 +184,6 @@ jobs:
             ---
             **Note**: These locked parameters will be used consistently across all environments (QA → Staging → Production)
           format: MARKDOWN
-
-  # Job 2: Display locked parameters for verification
   display-locked-parameters:
     needs:
       - validate-and-lock-parameters
@@ -222,8 +205,6 @@ jobs:
           echo "  • Locked By: ${{ needs.validate-and-lock-parameters.outputs.locked-initiator }}"
           echo ""
           echo "✅ All parameters verified and immutable"
-
-  # Job 3: Deploy to QA using locked parameters
   deploy-to-qa:
     environment: hackersnews-qa
     needs:
@@ -252,7 +233,6 @@ jobs:
           echo ""
           sleep 3
           echo "✅ QA deployment successful"
-
       - name: Register deployed artifact
         uses: cloudbees-io/publish-evidence-item@v1
         with:
@@ -271,8 +251,6 @@ jobs:
 
             ✅ Deployment successful using immutable parameters
           format: MARKDOWN
-
-  # Job 4: Test QA (conditionally skip based on locked parameter)
   test-qa:
     environment: hackersnews-qa
     needs:
@@ -295,8 +273,6 @@ jobs:
             echo "✅ Integration tests: 89/89 passed"
             echo "✅ API tests: 45/45 passed"
           fi
-
-  # Job 5: QA Approval (with parameter visibility)
   qa-approval:
     needs:
       - test-qa
@@ -317,8 +293,12 @@ jobs:
 
         **Note**: These parameters CANNOT be changed and will be used for Staging and Production deployments.
       disallowLaunchByUser: true
-
-  # Job 6: Deploy to Staging using same locked parameters
+      notifyAllEligibleUsers: false
+      approvalInputs: |
+        manual-tests-successful:
+          type: string
+          required: true
+          description: How many manual tests did pass sucessfully
   deploy-to-staging:
     environment: hackersnews-staging
     needs:
@@ -349,7 +329,6 @@ jobs:
           echo ""
           sleep 3
           echo "✅ Staging deployment successful"
-
       - name: Register deployed artifact
         uses: cloudbees-io/publish-evidence-item@v1
         with:
@@ -369,8 +348,6 @@ jobs:
 
             **Parameter Lock Timestamp**: ${{ needs.validate-and-lock-parameters.outputs.locked-timestamp }}
           format: MARKDOWN
-
-  # Job 7: Test Staging
   test-staging:
     environment: hackersnews-staging
     needs:
@@ -392,8 +369,6 @@ jobs:
             echo "✅ E2E tests: 24/24 passed"
             echo "✅ Performance tests: Passed"
           fi
-
-  # Job 8: Staging Approval (different approval group - Release Managers)
   staging-approval:
     needs:
       - test-staging
@@ -419,9 +394,7 @@ jobs:
 
         **Security**: Parameters have been locked since workflow initiation and cannot be modified.
       disallowLaunchByUser: true
-      approvers: ""  # In production, configure specific release manager group
-
-  # Job 9: Deploy to Production using same locked parameters
+      approvers: ""
   deploy-to-production:
     environment: hackersnews-prod
     needs:
@@ -446,7 +419,6 @@ jobs:
           echo "✅ Parameter integrity verified"
           echo "✅ No parameter drift detected"
           echo "✅ Safe to proceed with production deployment"
-
       - name: Deploy to Production with locked parameters
         uses: docker://alpine:3.20
         run: |
@@ -471,7 +443,6 @@ jobs:
           echo ""
           sleep 4
           echo "✅ Production deployment successful"
-
       - name: Conditionally enable feature flags
         uses: docker://alpine:3.20
         run: |
@@ -485,7 +456,6 @@ jobs:
           else
             echo "⏭️  Feature flags not enabled (per locked parameter)"
           fi
-
       - name: Register production deployment
         uses: cloudbees-io/publish-evidence-item@v1
         with:
@@ -512,8 +482,6 @@ jobs:
             ---
             **Compliance**: This deployment used immutable parameters for complete audit traceability.
           format: MARKDOWN
-
-  # Job 10: Smoke tests
   smoke-tests:
     environment: hackersnews-prod
     needs:
@@ -528,8 +496,6 @@ jobs:
           echo "✅ Health check: PASS"
           echo "✅ Critical paths: PASS"
           echo "✅ API endpoints: PASS"
-
-  # Job 11: Final verification that parameters remained unchanged
   verify-parameters-unchanged:
     needs:
       - smoke-tests
@@ -555,7 +521,6 @@ jobs:
           echo "✅ PARAMETER IMMUTABILITY VERIFIED"
           echo "✅ Same parameters used in QA, Staging, and Production"
           echo "✅ Full compliance and audit trail maintained"
-
       - name: Publish final audit evidence
         uses: cloudbees-io/publish-evidence-item@v1
         with:
