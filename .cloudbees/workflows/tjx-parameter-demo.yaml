@@ -103,9 +103,10 @@ jobs:
 
           # Lock all parameters with timestamp and initiator
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          INITIATOR="Workflow Run #${{ cloudbees.run_number }}"
 
           echo "📋 Parameters locked at: $TIMESTAMP"
-          echo "👤 Initiated by: ${{ cloudbees.actor }}"
+          echo "👤 Workflow Run: $INITIATOR"
           echo ""
           echo "Locked Parameters:"
           echo "  • Artifact Version: ${{ inputs.artifact_version }}"
@@ -124,7 +125,7 @@ jobs:
           echo "${{ inputs.enable_feature_flags }}" > $CLOUDBEES_OUTPUTS/enable-flags
           echo "${{ inputs.deployment_notes }}" > $CLOUDBEES_OUTPUTS/deployment-notes
           echo "$TIMESTAMP" > $CLOUDBEES_OUTPUTS/timestamp
-          echo "${{ cloudbees.actor }}" > $CLOUDBEES_OUTPUTS/initiator
+          echo "$INITIATOR" > $CLOUDBEES_OUTPUTS/initiator
 
           echo "✅ Parameters successfully locked"
 
@@ -184,7 +185,7 @@ jobs:
 
             ## Audit Information
             - **Locked Timestamp**: ${{ steps.lock-params.outputs.timestamp }}
-            - **Initiated By**: ${{ cloudbees.actor }}
+            - **Workflow Run**: ${{ cloudbees.run_number }}
             - **Workflow Run**: `#${{ cloudbees.run_number }}`
             - **Run ID**: `${{ cloudbees.run_id }}`
 
