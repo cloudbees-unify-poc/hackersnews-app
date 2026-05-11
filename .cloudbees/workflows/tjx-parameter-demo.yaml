@@ -227,6 +227,7 @@ jobs:
     environment: hackersnews-qa
     needs:
       - validate-and-lock-parameters
+      - display-locked-parameters
     steps:
       - name: Deploy to QA with locked parameters
         uses: docker://alpine:3.20
